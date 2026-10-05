@@ -142,6 +142,42 @@ class JfmtToolTest {
     }
 
     @Test
+    void breaksCodeToFitMaximumLineLength() {
+        String input = """
+                class Example {
+                    void example() {
+                        someObject.someMethodWithAVeryLongName(firstArgumentValue, secondArgumentValue, thirdArgumentValue, fourth);
+                    }
+                }
+                """;
+
+        Invocation unlimited = run(input, "-");
+        Invocation limited = run(input, "--max-line-length", "100", "-");
+
+        assertEquals(0, unlimited.exitCode(), unlimited.error());
+        assertEquals(input, unlimited.output());
+        assertEquals(0, limited.exitCode(), limited.error());
+        assertEquals("""
+                class Example {
+                    void example() {
+                        someObject.someMethodWithAVeryLongName(firstArgumentValue, secondArgumentValue,
+                                thirdArgumentValue, fourth);
+                    }
+                }
+                """, limited.output());
+    }
+
+    @Test
+    void rejectsInvalidMaximumLineLength() {
+        for (String value : List.of("0", "-1", "wide")) {
+            Invocation invocation = run("class Example {}\n", "--max-line-length", value, "-");
+
+            assertEquals(1, invocation.exitCode());
+            assertEquals("invalid line length: " + value + "\n", invocation.error());
+        }
+    }
+
+    @Test
     void providesHelpAndDelegatedCompletion() {
         Invocation help = run("", "--help");
         Invocation completion = run("", "__complete", "--mod");
@@ -789,6 +825,7 @@ class JfmtToolTest {
         assertEquals(1, options.isSupportedOption("--source"));
         assertEquals(1, options.isSupportedOption("-source"));
         assertEquals(0, options.isSupportedOption("--enable-preview"));
+        assertEquals(1, options.isSupportedOption("--max-line-length"));
         assertEquals(0, options.isSupportedOption("--check"));
         assertEquals(0, options.isSupportedOption("--help"));
         assertEquals(0, options.isSupportedOption("--version"));

@@ -411,7 +411,7 @@ index d30762e2445e0d9b885c5ab25ddd05965e3fbc71..8a77e84304d5714eab89689e9cc40c41
  
    /**
 diff --git a/java/AutoBuilder_JavaFormatterOptions_Builder.java b/java/AutoBuilder_JavaFormatterOptions_Builder.java
-index 0ca98357572c3be2862669ebc762ecb082d4369e..af078b749b7cc50b37035f2632766fb65bb0c7f1 100644
+index 0ca98357572c3be2862669ebc762ecb082d4369e..dd6e16b9f1895fe364671c9687f3dd6a6bf498d1 100644
 --- a/java/AutoBuilder_JavaFormatterOptions_Builder.java
 +++ b/java/AutoBuilder_JavaFormatterOptions_Builder.java
 @@ -1,6 +1,6 @@
@@ -422,54 +422,58 @@ index 0ca98357572c3be2862669ebc762ecb082d4369e..af078b749b7cc50b37035f2632766fb6
  
  @Generated("com.netflix.tools.jfmt.internal.com.google.auto.value.processor.AutoBuilderProcessor")
  class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Builder {
-@@ -9,10 +9,7 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
+@@ -9,10 +9,9 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
  
    private Boolean reorderModifiers;
  
 -  private JavaFormatterOptions.Style style;
--
++  private Integer maxLineLength;
+ 
 -  AutoBuilder_JavaFormatterOptions_Builder() {
 -  }
 +  AutoBuilder_JavaFormatterOptions_Builder() {}
  
    @Override
    public JavaFormatterOptions.Builder formatJavadoc(boolean formatJavadoc) {
-@@ -26,20 +23,9 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
-     return this;
+@@ -27,11 +26,8 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
    }
  
--  @Override
+   @Override
 -  public JavaFormatterOptions.Builder style(JavaFormatterOptions.Style style) {
 -    if (style == null) {
 -      throw new NullPointerException("Null style");
 -    }
 -    this.style = style;
--    return this;
--  }
--
-   @Override
++  public JavaFormatterOptions.Builder maxLineLength(int maxLineLength) {
++    this.maxLineLength = maxLineLength;
+     return this;
+   }
+ 
+@@ -39,7 +35,7 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
    public JavaFormatterOptions build() {
--    if (this.formatJavadoc == null
--        || this.reorderModifiers == null
+     if (this.formatJavadoc == null
+         || this.reorderModifiers == null
 -        || this.style == null) {
-+    if (this.formatJavadoc == null || this.reorderModifiers == null) {
++        || this.maxLineLength == null) {
        StringBuilder missing = new StringBuilder();
        if (this.formatJavadoc == null) {
          missing.append(" formatJavadoc");
-@@ -47,14 +33,8 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
+@@ -47,14 +43,12 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
        if (this.reorderModifiers == null) {
          missing.append(" reorderModifiers");
        }
 -      if (this.style == null) {
 -        missing.append(" style");
--      }
++      if (this.maxLineLength == null) {
++        missing.append(" maxLineLength");
+       }
        throw new IllegalStateException("Missing required properties:" + missing);
      }
--    return new JavaFormatterOptions(
+     return new JavaFormatterOptions(
 -        this.formatJavadoc,
 -        this.reorderModifiers,
 -        this.style);
-+    return new JavaFormatterOptions(this.formatJavadoc, this.reorderModifiers);
++        this.formatJavadoc, this.reorderModifiers, this.maxLineLength);
    }
  }
 diff --git a/java/AutoOneOf_JavaInputAstVisitor_AnnotationOrModifier.java b/java/AutoOneOf_JavaInputAstVisitor_AnnotationOrModifier.java
@@ -639,7 +643,7 @@ index 0000000000000000000000000000000000000000..641966a9fdaa83345a78c1f8655b5bfa
 +    private ControlBraces() {}
 +}
 diff --git a/java/Formatter.java b/java/Formatter.java
-index ca623ec16f4b95294a18592478c9636c46ec7c8b..48bdd262a432e915c3f2c9ceffd46892fbcc7308 100644
+index ca623ec16f4b95294a18592478c9636c46ec7c8b..8cb539c75f80a96c59d47652e0ed311f33c7bc6d 100644
 --- a/java/Formatter.java
 +++ b/java/Formatter.java
 @@ -21,8 +21,6 @@ import com.netflix.tools.jfmt.internal.com.google.common.collect.Iterators;
@@ -669,18 +673,16 @@ index ca623ec16f4b95294a18592478c9636c46ec7c8b..48bdd262a432e915c3f2c9ceffd46892
   *
   * <p>This formatter uses the javac parser to generate an AST. Because the AST loses information
   * about the non-tokens in the input (including newlines, comments, etc.), and even some tokens
-@@ -75,8 +71,9 @@ import javax.tools.JavaFileObject;
+@@ -75,7 +71,7 @@ import javax.tools.JavaFileObject;
  @Immutable
  public final class Formatter {
  
 -  public static final int MAX_LINE_LENGTH = 100;
 +  public static final int PREFERRED_LINE_WIDTH = 100;
  
-+  private static final int UNLIMITED_LINE_WIDTH = (1 << 28) - 1;
    static final Range<Integer> EMPTY_RANGE = Range.closedOpen(-1, -1);
  
-   private final JavaFormatterOptions options;
-@@ -104,7 +101,11 @@ public final class Formatter {
+@@ -104,7 +100,11 @@ public final class Formatter {
      List<Diagnostic<? extends JavaFileObject>> errorDiagnostics = new ArrayList<>();
      JCCompilationUnit unit =
          Trees.parse(
@@ -693,16 +695,16 @@ index ca623ec16f4b95294a18592478c9636c46ec7c8b..48bdd262a432e915c3f2c9ceffd46892
  
      javaInput.setCompilationUnit(unit);
      if (!errorDiagnostics.isEmpty()) {
-@@ -124,7 +125,7 @@ public final class Formatter {
+@@ -124,7 +124,7 @@ public final class Formatter {
              Newlines.guessLineSeparator(javaInput.getText()),
              options,
              markdownJavadocPositions.build());
 -    doc.computeBreaks(commentsHelper, MAX_LINE_LENGTH, new Doc.State(+0, 0));
-+    doc.computeBreaks(commentsHelper, UNLIMITED_LINE_WIDTH, new Doc.State(+0, 0));
++    doc.computeBreaks(commentsHelper, options.maxLineLength(), new Doc.State(+0, 0));
      doc.write(javaOutput);
      javaOutput.flush();
    }
-@@ -138,18 +139,6 @@ public final class Formatter {
+@@ -138,18 +138,6 @@ public final class Formatter {
      return !input.getCode().equals("compiler.err.invalid.meth.decl.ret.type.req");
    }
  
@@ -721,7 +723,7 @@ index ca623ec16f4b95294a18592478c9636c46ec7c8b..48bdd262a432e915c3f2c9ceffd46892
    /**
     * Format an input string (a Java compilation unit) into an output string.
     *
-@@ -160,6 +149,16 @@ public final class Formatter {
+@@ -160,6 +148,16 @@ public final class Formatter {
     * @throws FormatterException if the input string cannot be parsed
     */
    public String formatSource(String input) throws FormatterException {
@@ -738,7 +740,7 @@ index ca623ec16f4b95294a18592478c9636c46ec7c8b..48bdd262a432e915c3f2c9ceffd46892
      return formatSource(input, ImmutableList.of(Range.closedOpen(0, input.length())));
    }
  
-@@ -171,16 +170,11 @@ public final class Formatter {
+@@ -171,16 +169,11 @@ public final class Formatter {
     * @param input the input string
     * @return the output string
     * @throws FormatterException if the input string cannot be parsed
@@ -1020,10 +1022,10 @@ index 5fc7a1bbffd96dd7e98f73025b34935633f715a7..624f7682730104c72c0b30b93acdc44a
          while (idx >= 2 && !CharMatcher.whitespace().matches(line.charAt(idx))) {
            idx--;
 diff --git a/java/JavaFormatterOptions.java b/java/JavaFormatterOptions.java
-index ba7df323414645f8def61cf82f047cc5f6e42c53..ef863f7bd43268d7739fd9d4a5e6f2f9d1c09e6f 100644
+index ba7df323414645f8def61cf82f047cc5f6e42c53..68ae6909fcac6e400702957537e056c1527eeae4 100644
 --- a/java/JavaFormatterOptions.java
 +++ b/java/JavaFormatterOptions.java
-@@ -14,50 +14,28 @@
+@@ -14,50 +14,39 @@
  
  package com.netflix.tools.jfmt.internal.com.google.googlejavaformat.java;
  
@@ -1057,45 +1059,57 @@ index ba7df323414645f8def61cf82f047cc5f6e42c53..ef863f7bd43268d7739fd9d4a5e6f2f9
 -
 -    /** The AOSP-compliant configuration. */
 -    AOSP(2);
-+public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifiers) {
- 
+-
 -    private final int indentationMultiplier;
-+  /** Returns the multiplier for the unit of indent. */
-+  public int indentationMultiplier() {
-+    return 2;
-+  }
++public record JavaFormatterOptions(
++    boolean formatJavadoc, boolean reorderModifiers, int maxLineLength) {
  
 -    Style(int indentationMultiplier) {
 -      this.indentationMultiplier = indentationMultiplier;
 -    }
-+  int javadocWidth() {
-+    return 80;
-+  }
++  /** The {@link #maxLineLength()} that lays out code by structure alone. */
++  public static final int UNLIMITED_LINE_LENGTH = (1 << 28) - 1;
  
 -    int indentationMultiplier() {
 -      return indentationMultiplier;
--    }
-+  boolean preserveJavadocWrapping() {
-+    return true;
++  public JavaFormatterOptions {
++    if (maxLineLength <= 0) {
++      throw new IllegalArgumentException("maxLineLength must be positive: " + maxLineLength);
+     }
++    maxLineLength = Math.min(maxLineLength, UNLIMITED_LINE_LENGTH);
    }
  
--  /** Returns the multiplier for the unit of indent. */
--  public int indentationMultiplier() {
+   /** Returns the multiplier for the unit of indent. */
+   public int indentationMultiplier() {
 -    return style().indentationMultiplier();
++    return 2;
++  }
++
++  int javadocWidth() {
++    return 80;
++  }
++
++  boolean preserveJavadocWrapping() {
++    return true;
++  }
++
 +  boolean wrapLineComments() {
 +    return false;
    }
  
    /** Returns the default formatting options. */
-@@ -68,7 +46,6 @@ public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifie
+@@ -68,21 +57,21 @@ public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifie
    /** Returns a builder for {@link JavaFormatterOptions}. */
    public static Builder builder() {
      return new AutoBuilder_JavaFormatterOptions_Builder()
 -        .style(Style.GOOGLE)
          .formatJavadoc(true)
-         .reorderModifiers(true);
+-        .reorderModifiers(true);
++        .reorderModifiers(true)
++        .maxLineLength(UNLIMITED_LINE_LENGTH);
    }
-@@ -77,8 +54,6 @@ public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifie
+ 
+   /** A builder for {@link JavaFormatterOptions}. */
    @AutoBuilder
    public abstract static class Builder {
  
@@ -1104,6 +1118,12 @@ index ba7df323414645f8def61cf82f047cc5f6e42c53..ef863f7bd43268d7739fd9d4a5e6f2f9
      public abstract Builder formatJavadoc(boolean formatJavadoc);
  
      public abstract Builder reorderModifiers(boolean reorderModifiers);
+ 
++    public abstract Builder maxLineLength(int maxLineLength);
++
+     public abstract JavaFormatterOptions build();
+   }
+ }
 diff --git a/java/JavaInput.java b/java/JavaInput.java
 index d7257f07157b85941e045130d48f39e888bfd748..e7f71ae9f098cd65dfb06764490b82696235253a 100644
 --- a/java/JavaInput.java
@@ -1186,10 +1206,60 @@ index d7257f07157b85941e045130d48f39e888bfd748..e7f71ae9f098cd65dfb06764490b8269
      try {
        @SuppressWarnings("unchecked")
 diff --git a/java/JavaInputAstVisitor.java b/java/JavaInputAstVisitor.java
-index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d2478c5b5a6 100644
+index 30d24252b38321d12fa31550aac5c536d3ed91be..065dbe3c70ea4d5d1065656b521136944ab179d7 100644
 --- a/java/JavaInputAstVisitor.java
 +++ b/java/JavaInputAstVisitor.java
-@@ -270,15 +270,23 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -23,7 +23,6 @@ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.Indent
+ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.OpsBuilder.BlankLineWanted.PRESERVE;
+ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.OpsBuilder.BlankLineWanted.YES;
+ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.java.Trees.getEndPosition;
+-import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.java.Trees.getLength;
+ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.java.Trees.getMethodName;
+ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.java.Trees.getSourceForNode;
+ import static com.netflix.tools.jfmt.internal.com.google.googlejavaformat.java.Trees.getStartPosition;
+@@ -43,6 +42,7 @@ import static com.sun.source.tree.Tree.Kind.STRING_LITERAL;
+ import static com.sun.source.tree.Tree.Kind.UNION_TYPE;
+ import static com.sun.source.tree.Tree.Kind.VARIABLE;
+ import static com.sun.tools.javac.code.Flags.COMPACT_RECORD_CONSTRUCTOR;
++import static com.sun.tools.javac.code.Flags.IMPLICIT_CLASS;
+ import static com.sun.tools.javac.code.Flags.RECORD;
+ import static java.util.Objects.requireNonNull;
+ import static java.util.stream.Collectors.joining;
+@@ -50,7 +50,6 @@ import static java.util.stream.Collectors.toList;
+ 
+ import com.netflix.tools.jfmt.internal.com.google.auto.value.AutoOneOf;
+ import com.netflix.tools.jfmt.internal.com.google.common.base.MoreObjects;
+-import com.netflix.tools.jfmt.internal.com.google.common.base.Predicate;
+ import com.netflix.tools.jfmt.internal.com.google.common.base.Throwables;
+ import com.netflix.tools.jfmt.internal.com.google.common.base.Verify;
+ import com.netflix.tools.jfmt.internal.com.google.common.collect.HashMultiset;
+@@ -158,7 +157,6 @@ import com.sun.tools.javac.code.Flags;
+ import com.sun.tools.javac.tree.JCTree;
+ import com.sun.tools.javac.tree.JCTree.JCMethodDecl;
+ import com.sun.tools.javac.tree.TreeInfo;
+-import com.sun.tools.javac.tree.TreeScanner;
+ import java.lang.reflect.Method;
+ import java.util.ArrayDeque;
+ import java.util.ArrayList;
+@@ -166,14 +164,15 @@ import java.util.Collection;
+ import java.util.Comparator;
+ import java.util.Deque;
+ import java.util.HashSet;
++import java.util.IdentityHashMap;
++import java.util.Iterator;
+ import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Map;
+ import java.util.Optional;
+ import java.util.OptionalInt;
+ import java.util.Set;
+-import java.util.regex.Pattern;
+-import java.util.stream.Stream;
++import java.util.function.ToIntFunction;
+ import javax.lang.model.element.Name;
+ import com.netflix.tools.jfmt.internal.org.jspecify.annotations.Nullable;
+ 
+@@ -270,15 +269,25 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      return result.build();
    }
  
@@ -1206,10 +1276,12 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +  private BreakTag argumentBreak;
 +  private BreakTag chainBreak;
 +  private ExpressionTree variableInitializer;
-+  // An enclosing argument-list break takes precedence over breaks inside its arguments.
-+  private int brokenArgumentListDepth;
-+  // A chain break suppresses optional width-based breaks in its base expression.
-+  private int widthBreakSuppressionDepth;
++  // Flattened chains emit intermediate calls without scanning them, so TreePath is not their owner.
++  private Tree argumentOwner;
++  // Cache context-free measurements, not layout plans: enclosing breaks can change the chosen plan.
++  private final Map<Tree, Integer> syntaxWidths = new IdentityHashMap<>();
++  private final Map<List<? extends Tree>, RowWidthScores> rowScores = new IdentityHashMap<>();
++  private LayoutContext layoutContext = LayoutContext.UNBROKEN;
 +
 +  protected static final Indent.Const ZERO = Indent.Const.ZERO;
 +  protected final int indentMultiplier;
@@ -1221,7 +1293,26 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
  
    private final Set<Name> typeAnnotationSimpleNames = new HashSet<>();
  
-@@ -315,12 +323,691 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -297,17 +306,9 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     return ImmutableList.of(Doc.Break.make(FillMode.FORCED, "", Indent.Const.ZERO, breakTag));
+   }
+ 
+-  /**
+-   * Allow multi-line filling (of array initializers, argument lists, and boolean expressions) for
+-   * items with length less than or equal to this threshold.
+-   */
++  // Array elements shorter than this syntax width may use independent filling.
+   private static final int MAX_ITEM_LENGTH_FOR_FILLING = 10;
+ 
+-  /**
+-   * The {@code Visitor} constructor.
+-   *
+-   * @param builder the {@link OpsBuilder}
+-   */
+   JavaInputAstVisitor(
+       OpsBuilder builder,
+       int indentMultiplier,
+@@ -315,12 +316,708 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      this.builder = builder;
      this.indentMultiplier = indentMultiplier;
      this.markdownJavadocPositions = markdownJavadocPositions;
@@ -1233,13 +1324,12 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      plusFour = Indent.Const.make(+4, indentMultiplier);
    }
  
-+  // Keep no more than six directly visible members or operations together. Composite expressions
-+  // contribute their immediate parts; other members contribute at most two operations, so nested
-+  // implementation detail cannot dominate.
++  // Structural budget for one row. Member weights count visible operations rather than every
++  // descendant; enclosingExpressionComplexity separately accounts for nested calls and chains.
 +  private static final int MAX_UNBROKEN_COMPLEXITY = 6;
 +
-+  // Source width can add list breaks, but does not impose a maximum line length. The final or only
-+  // member does not affect the score because there is no following member to separate from it.
++  // Compare weighted syntax width with the cost of another row. The last member's width is not
++  // counted: it cannot separate any following member.
 +  private static final long ROW_BREAK_SCORE = 150;
 +  private static final long BROKEN_MEMBER_WEIGHT =
 +      ROW_BREAK_SCORE / (MAX_UNBROKEN_COMPLEXITY - 1);
@@ -1248,6 +1338,35 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    FLAT,
 +    WRAPPED,
 +    BROKEN
++  }
++
++  private record ListStructure(
++      ListLayout layout, int firstBreakIndex, boolean containsNestedBlock) {}
++
++  private record ListPlan(ListLayout layout, int breakIndex, boolean ownsLayout) {}
++
++  // List breaks separate siblings; chain breaks also replace optional wrapping inside their calls.
++  private enum LayoutContext {
++    UNBROKEN,
++    BROKEN_LIST,
++    BROKEN_CHAIN;
++
++    LayoutContext inBrokenList() {
++      // A list inside a broken chain must not re-enable optional child wrapping.
++      return this == BROKEN_CHAIN ? BROKEN_CHAIN : BROKEN_LIST;
++    }
++  }
++
++  // Cached positions and suffix weights let each continuation candidate be scored in constant time.
++  private record RowWidthScores(long flatScore, long[] positions, long[] suffixWeights) {
++    long wrappedScore(int breakIndex) {
++      // A break moves every later member left by the first continuation member's position.
++      return flatScore - positions[breakIndex] * suffixWeights[breakIndex];
++    }
++
++    int size() {
++      return positions.length;
++    }
 +  }
 +
 +  private static ListLayout listLayout(
@@ -1361,6 +1480,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +      };
 +
 +  private static boolean containsNestedBlock(ExpressionTree expression) {
++    // Direct lambdas and anonymous classes handle their own bodies; look for blocks inside calls.
 +    return !(expression instanceof LambdaExpressionTree)
 +        && !(expression instanceof NewClassTree)
 +        && Boolean.TRUE.equals(BLOCK_FINDER.scan(expression, null));
@@ -1368,6 +1488,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +
 +  private static Indent preservePreviousIndent(
 +      List<BreakTag> previousBreaks, Indent otherwise) {
++    // Later continuation breaks reuse the most recent taken break instead of adding another indent.
 +    Indent indent = otherwise;
 +    for (BreakTag previous : previousBreaks) {
 +      indent = Indent.If.make(previous, Indent.fromBreak(previous), indent);
@@ -1533,11 +1654,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +      argument = parenthesized.getExpression();
 +    }
 +    if (!(argument instanceof LambdaExpressionTree lambda)) {
-+      int complexity = Math.max(memberComplexity(argument), enclosingExpressionComplexity(argument));
-+      int invocationCount = dereferenceInvocationCount(argument);
-+      return invocationCount > 1
-+          ? Math.max(complexity, 1 + 2 * invocationCount)
-+          : complexity;
++      return Math.max(memberComplexity(argument), enclosingExpressionComplexity(argument));
 +    }
 +    if (lambda.getBody() instanceof BlockTree) {
 +      return Math.max(memberComplexity(argument), lambdaComplexity(lambda));
@@ -1557,9 +1674,10 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    } else {
 +      complexity = expressionComplexity(expression);
 +      if (expression instanceof ExpressionTree expressionTree) {
-+        int invocationCount = dereferenceInvocationCount(expressionTree);
-+        if (invocationCount > 1) {
-+          complexity = Math.max(complexity, 1 + 2 * invocationCount);
++        int callCount = chainCallCount(expressionTree);
++        if (callCount > 1) {
++          // One unit for the receiver and two per call, regardless of how the receiver is written.
++          complexity = Math.max(complexity, 1 + 2 * callCount);
 +        }
 +      }
 +    }
@@ -1586,13 +1704,10 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    return complexity;
 +  }
 +
-+  private int sourceWidth(Tree member) {
-+    int startPosition = getStartPosition(member);
-+    int endPosition = getEndPosition(member, getCurrentPath());
-+    if (startPosition < 0 || endPosition <= startPosition) {
-+      return 0;
-+    }
-+    return builder.actualSize(startPosition, endPosition - startPosition);
++  private int syntaxWidth(Tree member) {
++    // Raw source spans include authored whitespace and can change after the first formatting pass.
++    // javac's rendering is stable across those changes; comments have a separate layout.
++    return syntaxWidths.computeIfAbsent(member, tree -> tree.toString().length());
 +  }
 +
 +  private static int memberLayoutWeight(Tree member) {
@@ -1600,26 +1715,38 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    return member instanceof MemberReferenceTree ? 1 : memberComplexity(member);
 +  }
 +
-+  private long rowWidthScore(List<? extends Tree> members, int fromIndex, int toIndex) {
-+    long score = 0;
-+    int column = 0;
-+    for (int i = fromIndex; i < toIndex; i++) {
-+      if (i > fromIndex) {
-+        column += 2;
-+        score += (long) memberLayoutWeight(members.get(i)) * column;
-+      }
-+      column += sourceWidth(members.get(i));
++  private RowWidthScores rowWidthScores(List<? extends Tree> members) {
++    return rowScores.computeIfAbsent(members, this::measureRows);
++  }
++
++  private RowWidthScores measureRows(List<? extends Tree> members) {
++    int size = members.size();
++    long[] positions = new long[size];
++    long[] suffixWeights = new long[size];
++    long column = 0;
++    long flatScore = 0;
++    int index = 0;
++    // javac's lists can be linked; iterate once rather than repeatedly indexing each candidate row.
++    for (Tree member : members) {
++      long weight = memberLayoutWeight(member);
++      positions[index] = column;
++      suffixWeights[index] = weight;
++      flatScore += weight * column;
++      column += syntaxWidth(member) + 2;
++      index++;
 +    }
-+    return score;
++    for (int i = size - 2; i >= 0; i--) {
++      suffixWeights[i] += suffixWeights[i + 1];
++    }
++    return new RowWidthScores(flatScore, positions, suffixWeights);
 +  }
 +
 +  private long flatWidthScore(List<? extends Tree> members) {
-+    return rowWidthScore(members, 0, members.size());
++    return rowWidthScores(members).flatScore();
 +  }
 +
 +  private long wrappedWidthScore(List<? extends Tree> members, int breakIndex) {
-+    return rowWidthScore(members, 0, breakIndex)
-+        + rowWidthScore(members, breakIndex, members.size());
++    return rowWidthScores(members).wrappedScore(breakIndex);
 +  }
 +
 +  private int preferredWrappedBreakIndex(List<? extends Tree> members) {
@@ -1630,6 +1757,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +      List<? extends Tree> members, int structuralBreakIndex) {
 +    if (structuralBreakIndex > 0
 +        && members.stream().anyMatch(JavaInputAstVisitor::requiresIndependentLayout)) {
++      // Bodies need the structural separator; moving it can pack other members against their braces.
 +      return structuralBreakIndex;
 +    }
 +    int bestIndex = structuralBreakIndex > 0 ? structuralBreakIndex : 1;
@@ -1637,7 +1765,8 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +        structuralBreakIndex > 0
 +            ? wrappedWidthScore(members, structuralBreakIndex)
 +            : Long.MAX_VALUE;
-+    for (int i = 1; i < members.size(); i++) {
++    int size = rowWidthScores(members).size();
++    for (int i = 1; i < size; i++) {
 +      long score = wrappedWidthScore(members, i);
 +      if (structuralBreakIndex > 0 && i != structuralBreakIndex) {
 +        score += ROW_BREAK_SCORE;
@@ -1657,9 +1786,14 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +
 +  private static long brokenLayoutScore(List<? extends Tree> members) {
 +    long score = ROW_BREAK_SCORE;
-+    for (int i = 1; i < members.size(); i++) {
-+      long memberWeight = memberLayoutWeight(members.get(i));
-+      score += BROKEN_MEMBER_WEIGHT * memberWeight * memberWeight;
++    boolean afterFirst = false;
++    for (Tree member : members) {
++      if (afterFirst) {
++        // Squared weights make full expansion more costly than a single wrap for structured peers.
++        long weight = memberLayoutWeight(member);
++        score += BROKEN_MEMBER_WEIGHT * weight * weight;
++      }
++      afterFirst = true;
 +    }
 +    return score;
 +  }
@@ -1675,14 +1809,14 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +
 +  private ListLayout widthAwareListLayout(
 +      List<? extends Tree> members, ListLayout structuralLayout) {
-+    if (widthBreakSuppressionDepth > 0) {
++    if (layoutContext == LayoutContext.BROKEN_CHAIN) {
 +      boolean requiresIndependentLayout =
 +          members.stream().anyMatch(JavaInputAstVisitor::requiresIndependentLayout);
 +      return structuralLayout == ListLayout.BROKEN || requiresIndependentLayout
 +          ? structuralLayout
 +          : ListLayout.FLAT;
 +    }
-+    if (members.size() < 2 || brokenArgumentListDepth > 0) {
++    if (members.size() < 2 || layoutContext == LayoutContext.BROKEN_LIST) {
 +      return structuralLayout;
 +    }
 +    return switch (structuralLayout) {
@@ -1702,78 +1836,76 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    };
 +  }
 +
-+  private static int argumentListMemberComplexity(ExpressionTree argument) {
-+    return argumentComplexity(argument);
-+  }
-+
-+  private int argumentListComplexity(
-+      List<? extends ExpressionTree> arguments) {
-+    int complexity = 0;
-+    for (ExpressionTree argument : arguments) {
-+      complexity += argumentListMemberComplexity(argument);
-+    }
-+    return complexity;
-+  }
-+
-+  private int argumentListBreakCount(
-+      List<? extends ExpressionTree> arguments) {
-+    int breaks = 0;
++  private static ListStructure listStructure(
++      List<? extends ExpressionTree> members,
++      ToIntFunction<ExpressionTree> weight,
++      boolean separateNestedBlocks) {
++    int totalComplexity = 0;
 +    int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
-+    boolean afterFirst = false;
-+    for (ExpressionTree argument : arguments) {
-+      int complexity = argumentListMemberComplexity(argument);
-+      if (afterFirst
-+          && (containsNestedBlock(argument) || complexity > remainingComplexity)) {
++    int breaks = 0;
++    int firstBreakIndex = -1;
++    boolean hasNestedBlock = false;
++    int index = 0;
++    for (ExpressionTree member : members) {
++      int complexity = weight.applyAsInt(member);
++      boolean nestedBlock = separateNestedBlocks && containsNestedBlock(member);
++      hasNestedBlock |= nestedBlock;
++      if (index > 0 && (nestedBlock || complexity > remainingComplexity)) {
++        if (firstBreakIndex < 0) {
++          firstBreakIndex = index;
++        }
 +        breaks++;
 +        remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
 +      }
++      totalComplexity += complexity;
 +      remainingComplexity -= complexity;
-+      afterFirst = true;
++      index++;
 +    }
-+    return breaks;
++    return new ListStructure(
++        listLayout(breaks, totalComplexity, /* breakAtTwoRows= */ true),
++        firstBreakIndex,
++        hasNestedBlock);
 +  }
 +
-+  private int argumentListStructuralBreakIndex(
-+      List<? extends ExpressionTree> arguments) {
-+    int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
-+    for (int i = 0; i < arguments.size(); i++) {
-+      ExpressionTree argument = arguments.get(i);
-+      int complexity = argumentListMemberComplexity(argument);
-+      if (i > 0
-+          && (containsNestedBlock(argument) || complexity > remainingComplexity)) {
-+        return i;
-+      }
-+      remainingComplexity -= complexity;
++  private ListPlan listPlan(
++      List<? extends ExpressionTree> members, ListStructure structure) {
++    // Choose before entering the child context; suppression there must not change the parent's plan.
++    ListLayout layout = widthAwareListLayout(members, structure.layout());
++    if (structure.containsNestedBlock()) {
++      // These arguments already contain line breaks. Keep the outer list flat or wrapped rather
++      // than letting block contents force every argument onto its own line.
++      layout = layout == ListLayout.FLAT ? ListLayout.FLAT : ListLayout.WRAPPED;
++    } else {
++      layout = listLayoutWithChildren(members, layout);
 +    }
-+    return -1;
++    int breakIndex = layout == ListLayout.WRAPPED
++        ? preferredWrappedBreakIndex(members, structure.firstBreakIndex())
++        : -1;
++    return new ListPlan(
++        layout, breakIndex, layout != ListLayout.FLAT || structure.containsNestedBlock());
 +  }
 +
-+  private ListLayout structuralArgumentListLayout(
-+      List<? extends ExpressionTree> arguments) {
-+    return listLayout(
-+        argumentListBreakCount(arguments),
-+        argumentListComplexity(arguments),
-+        /* breakAtTwoRows= */ true);
++  private ListPlan argumentListPlan(List<? extends ExpressionTree> arguments) {
++    return listPlan(arguments,
++        listStructure(arguments, JavaInputAstVisitor::argumentComplexity,
++            /* separateNestedBlocks= */ true));
 +  }
 +
-+  private ListLayout argumentListLayout(
-+      List<? extends ExpressionTree> arguments) {
-+    boolean containsNestedBlock =
-+        arguments.stream().anyMatch(JavaInputAstVisitor::containsNestedBlock);
-+    ListLayout layout =
-+        widthAwareListLayout(arguments, structuralArgumentListLayout(arguments));
-+    if (containsNestedBlock) {
-+      return layout == ListLayout.FLAT ? ListLayout.FLAT : ListLayout.WRAPPED;
-+    }
++  private ListLayout argumentListLayout(List<? extends ExpressionTree> arguments) {
++    return argumentListPlan(arguments).layout();
++  }
++
++  private ListLayout listLayoutWithChildren(
++      List<? extends ExpressionTree> members, ListLayout layout) {
 +    ListLayout childLayout = ListLayout.FLAT;
-+    for (ExpressionTree argument : arguments) {
-+      ListLayout candidate = expressionLayout(argument);
++    for (ExpressionTree member : members) {
++      ListLayout candidate = expressionLayout(member);
 +      if (candidate.ordinal() > childLayout.ordinal()) {
 +        childLayout = candidate;
 +      }
 +    }
 +    if (childLayout == ListLayout.BROKEN
-+        || (childLayout == ListLayout.WRAPPED && arguments.size() > 1)) {
++        || (childLayout == ListLayout.WRAPPED && members.size() > 1)) {
 +      return ListLayout.BROKEN;
 +    }
 +    return layout;
@@ -1784,6 +1916,8 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +      expression = parenthesized.getExpression();
 +    }
 +    return switch (expression) {
++      case AssignmentTree assignment -> expressionLayout(assignment.getExpression());
++      case AnnotationTree annotation -> annotationLayout(annotation);
 +      case MethodInvocationTree invocation -> argumentListLayout(invocation.getArguments());
 +      case NewClassTree construction -> argumentListLayout(construction.getArguments());
 +      case NewArrayTree array -> arrayInitializerLayout(array.getInitializers());
@@ -1793,51 +1927,25 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    };
 +  }
 +
-+  private static int arrayInitializerStructuralBreakIndex(
-+      List<? extends ExpressionTree> expressions) {
-+    int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
-+    for (int i = 0; i < expressions.size(); i++) {
-+      int complexity = memberComplexity(expressions.get(i));
-+      if (i > 0 && complexity > remainingComplexity) {
-+        return i;
-+      }
-+      remainingComplexity -= complexity;
++  private ListLayout annotationLayout(AnnotationTree annotation) {
++    List<? extends ExpressionTree> arguments = annotation.getArguments();
++    if (arguments.size() == 1 && !(arguments.get(0) instanceof AssignmentTree)) {
++      return expressionLayout(arguments.get(0));
 +    }
-+    return -1;
++    boolean breakMembers = argumentListLayout(arguments) != ListLayout.FLAT
++        || (arguments.size() > 1
++            && Iterables.any(arguments, JavaInputAstVisitor::isArrayValue));
++    return breakMembers ? ListLayout.BROKEN : ListLayout.FLAT;
 +  }
 +
-+  private static ListLayout structuralArrayInitializerLayout(
-+      List<? extends ExpressionTree> expressions) {
-+    int complexity = 0;
-+    int breaks = 0;
-+    int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
-+    boolean afterFirst = false;
-+    for (ExpressionTree expression : expressions) {
-+      int memberComplexity = memberComplexity(expression);
-+      if (afterFirst && memberComplexity > remainingComplexity) {
-+        breaks++;
-+        remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
-+      }
-+      complexity += memberComplexity;
-+      remainingComplexity -= memberComplexity;
-+      afterFirst = true;
-+    }
-+    return listLayout(breaks, complexity, /* breakAtTwoRows= */ true);
++  private ListPlan arrayInitializerPlan(List<? extends ExpressionTree> expressions) {
++    return listPlan(expressions,
++        listStructure(expressions, JavaInputAstVisitor::memberComplexity,
++            /* separateNestedBlocks= */ false));
 +  }
 +
-+  private ListLayout arrayInitializerLayout(
-+      List<? extends ExpressionTree> expressions) {
-+    if (expressions == null) {
-+      return ListLayout.FLAT;
-+    }
-+    ListLayout layout =
-+        widthAwareListLayout(expressions, structuralArrayInitializerLayout(expressions));
-+    for (ExpressionTree expression : expressions) {
-+      if (expressionLayout(expression) == ListLayout.BROKEN) {
-+        return ListLayout.BROKEN;
-+      }
-+    }
-+    return layout;
++  private ListLayout arrayInitializerLayout(List<? extends ExpressionTree> expressions) {
++    return expressions == null ? ListLayout.FLAT : arrayInitializerPlan(expressions).layout();
 +  }
 +
 +  private static int maximumExpressionComplexity(List<? extends Tree> trees) {
@@ -1913,11 +2021,42 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
    /** A record of whether we have visited into an expression. */
    private final Deque<Boolean> inExpression = new ArrayDeque<>(ImmutableList.of(false));
  
-@@ -518,6 +1205,23 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -424,9 +1121,6 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     }
+   }
+ 
+-  // Replace with Flags.IMPLICIT_CLASS once JDK 25 is the minimum supported version
+-  private static final int IMPLICIT_CLASS = 1 << 19;
+-
+   @Override
+   public Void visitClass(ClassTree tree, Void unused) {
+     if ((TreeInfo.flags((JCTree) tree) & IMPLICIT_CLASS) == IMPLICIT_CLASS) {
+@@ -511,6 +1205,20 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+   }
+ 
+   private boolean visitArrayInitializer(List<? extends ExpressionTree> expressions) {
++    ListPlan plan = arrayInitializerPlan(expressions);
++    LayoutContext previousContext = layoutContext;
++    if (plan.ownsLayout()) {
++      layoutContext = layoutContext.inBrokenList();
++    }
++    try {
++      return emitArrayInitializer(expressions, plan);
++    } finally {
++      layoutContext = previousContext;
++    }
++  }
++
++  private boolean emitArrayInitializer(
++      List<? extends ExpressionTree> expressions, ListPlan plan) {
+     int cols;
+     if (expressions.isEmpty()) {
+       tokenBreakTrailingComment("{", plusTwo);
+@@ -518,6 +1226,23 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
          token(",");
        }
        token("}", plusTwo);
-+    } else if (arrayInitializerLayout(expressions) == ListLayout.BROKEN) {
++    } else if (plan.layout() == ListLayout.BROKEN) {
 +      builder.open(plusTwo);
 +      token("{");
 +      builder.forcedBreak();
@@ -1937,50 +2076,44 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      } else if ((cols = argumentsAreTabular(expressions)) != -1) {
        builder.open(plusTwo);
        token("{");
-@@ -562,6 +1266,20 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -545,10 +1270,8 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       builder.close();
+       token("}", plusTwo);
+     } else {
+-      // Special-case the formatting of array initializers inside annotations
+-      // to more eagerly use a one-per-line layout.
+       boolean inMemberValuePair = false;
+-      // walk up past the enclosing NewArrayTree (and maybe an enclosing AssignmentTree)
++      // Annotation assignments are emitted directly, so the path may omit the AssignmentTree.
+       TreePath path = getCurrentPath();
+       for (int i = 0; i < 2; i++) {
+         if (path == null) {
+@@ -562,6 +1285,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
        }
        boolean shortItems = hasOnlyShortItems(expressions);
        boolean allowFilledElementsOnOwnLine = shortItems || !inMemberValuePair;
-+      ListLayout structuralLayout = structuralArrayInitializerLayout(expressions);
-+      ListLayout layout = widthAwareListLayout(expressions, structuralLayout);
-+      int widthBreakIndex =
-+          layout == ListLayout.WRAPPED
-+              ? preferredWrappedBreakIndex(
-+                  expressions, arrayInitializerStructuralBreakIndex(expressions))
-+              : -1;
-+      int initializerComplexity = 0;
-+      for (ExpressionTree expression : expressions) {
-+        initializerComplexity += memberComplexity(expression);
-+      }
-+      boolean breakInitializer =
-+          initializerComplexity > MAX_UNBROKEN_COMPLEXITY
-+              || layout != ListLayout.FLAT;
++      boolean breakInitializer = plan.layout() != ListLayout.FLAT;
  
        builder.open(plusTwo);
        tokenBreakTrailingComment("{", plusTwo);
-@@ -571,20 +1289,31 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
-         builder.open(ZERO);
+@@ -572,19 +1296,27 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
        }
        boolean afterFirstToken = false;
-+      int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
        FillMode fillMode = shortItems ? FillMode.INDEPENDENT : FillMode.UNIFIED;
--      for (ExpressionTree expression : expressions) {
-+      for (int i = 0; i < expressions.size(); i++) {
-+        ExpressionTree expression = expressions.get(i);
-+        int complexity = memberComplexity(expression);
++      int index = 0;
+       for (ExpressionTree expression : expressions) {
          if (afterFirstToken) {
            token(",");
 -          builder.breakOp(fillMode, " ", ZERO);
-+          if (i == widthBreakIndex || complexity > remainingComplexity) {
++          if (index == plan.breakIndex()) {
 +            builder.forcedBreak(plusFour);
-+            remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
 +          } else {
 +            builder.breakOp(fillMode, " ", ZERO);
 +          }
          }
          scan(expression, null);
-+        remainingComplexity -= complexity;
          afterFirstToken = true;
++        index++;
        }
        builder.guessToken(",");
        if (allowFilledElementsOnOwnLine) {
@@ -1992,6 +2125,18 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +      }
        builder.close();
        token("}", plusTwo);
+     }
+@@ -593,10 +1325,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+ 
+   private boolean hasOnlyShortItems(List<? extends ExpressionTree> expressions) {
+     for (ExpressionTree expression : expressions) {
+-      int startPosition = getStartPosition(expression);
+-      if (builder.actualSize(
+-              startPosition, getEndPosition(expression, getCurrentPath()) - startPosition)
+-          >= MAX_ITEM_LENGTH_FOR_FILLING) {
++      if (syntaxWidth(expression) >= MAX_ITEM_LENGTH_FOR_FILLING) {
+         return false;
+       }
      }
 @@ -643,11 +1372,19 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
    @Override
@@ -2015,6 +2160,15 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      scan(node.getExpression(), null);
      builder.close();
      return null;
+@@ -718,7 +1455,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       visitAnnotations(annotations, BreakOrNot.NO, BreakOrNot.YES);
+     }
+     scan(node.getIdentifier(), null);
+-    addArguments(node.getArguments(), plusFour);
++    addArguments(node, node.getArguments(), plusFour);
+     builder.close();
+     if (node.getClassBody() != null) {
+       addBodyDeclarations(
 @@ -730,13 +1467,24 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
    @Override
    public Void visitConditionalExpression(ConditionalExpressionTree node, Void unused) {
@@ -2042,6 +2196,15 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      token(":");
      builder.space();
      scan(node.getFalseExpression(), null);
+@@ -826,7 +1574,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       builder.guessToken("(");
+       builder.guessToken(")");
+     } else {
+-      addArguments(init.getArguments(), plusFour);
++      addArguments(init, init.getArguments(), plusFour);
+     }
+     if (init.getClassBody() != null) {
+       addBodyDeclarations(
 @@ -956,11 +1704,10 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
        ImmutableList<JCTree.JCVariableDecl> parameters = JavaInputAstVisitor.recordVariables(node);
        token("(");
@@ -2217,7 +2380,63 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      } else {
        builder.breakOp(" ");
      }
-@@ -1592,9 +2411,10 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -1394,28 +2213,36 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     if (!node.getArguments().isEmpty()) {
+       builder.open(plusFour);
+       token("(");
+-      builder.breakOp();
+-      boolean afterFirstToken = false;
+-
+-      // Format the member value pairs one-per-line if any of them are
+-      // initialized with arrays.
+-      boolean hasArrayInitializer =
+-          Iterables.any(node.getArguments(), JavaInputAstVisitor::isArrayValue);
+-      for (ExpressionTree argument : node.getArguments()) {
+-        if (afterFirstToken) {
+-          token(",");
+-          if (hasArrayInitializer) {
+-            builder.forcedBreak();
++      // Named members are configuration entries rather than positional arguments. Once the list
++      // needs separation, expose each entry instead of packing continuation rows.
++      boolean breakMembers = annotationLayout(node) != ListLayout.FLAT;
++      LayoutContext previousContext = layoutContext;
++      if (breakMembers) {
++        builder.forcedBreak();
++        layoutContext = layoutContext.inBrokenList();
++      } else {
++        builder.breakOp();
++      }
++      try {
++        boolean afterFirstToken = false;
++        for (ExpressionTree argument : node.getArguments()) {
++          if (afterFirstToken) {
++            token(",");
++            if (breakMembers) {
++              builder.forcedBreak();
++            } else {
++              builder.breakOp(" ");
++            }
++          }
++          if (argument instanceof AssignmentTree assignment) {
++            visitAnnotationArgument(assignment);
+           } else {
+-            builder.breakOp(" ");
++            scan(argument, null);
+           }
++          afterFirstToken = true;
+         }
+-        if (argument instanceof AssignmentTree assignmentTree) {
+-          visitAnnotationArgument(assignmentTree);
+-        } else {
+-          scan(argument, null);
+-        }
+-        afterFirstToken = true;
++      } finally {
++        layoutContext = previousContext;
+       }
+       token(")");
+       builder.close();
+@@ -1592,9 +2419,10 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      {
        if (!isRecordConstructor) {
          if (!node.getParameters().isEmpty() || node.getReceiverParameter() != null) {
@@ -2231,7 +2450,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
          }
          token(")");
        }
-@@ -1602,7 +2422,15 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -1602,7 +2430,15 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
          maybeAddDims(dims);
        }
        if (!node.getThrows().isEmpty()) {
@@ -2248,7 +2467,107 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
          builder.open(plusFour);
          {
            visitThrowsClause(node.getThrows());
-@@ -2016,7 +2844,15 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -1666,90 +2502,10 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+   @Override
+   public Void visitMethodInvocation(MethodInvocationTree node, Void unused) {
+     sync(node);
+-    if (handleLogStatement(node)) {
+-      return null;
+-    }
+     visitDot(node);
+     return null;
+   }
+ 
+-  /**
+-   * Special-cases log statements, to output:
+-   *
+-   * <pre>{@code
+-   * logger.atInfo().log(
+-   *     "Number of foos: %d, foos.size());
+-   * }</pre>
+-   *
+-   * <p>Instead of:
+-   *
+-   * <pre>{@code
+-   * logger
+-   *     .atInfo()
+-   *     .log(
+-   *         "Number of foos: %d, foos.size());
+-   * }</pre>
+-   */
+-  private boolean handleLogStatement(MethodInvocationTree node) {
+-    Name methodName = getMethodName(node);
+-    if (!methodName.contentEquals("log") && !methodName.contentEquals("logVarargs")) {
+-      return false;
+-    }
+-    Deque<ExpressionTree> parts = new ArrayDeque<>();
+-    ExpressionTree curr = node;
+-    while (curr instanceof MethodInvocationTree method) {
+-      parts.addFirst(method);
+-      if (!LOG_METHODS.contains(getMethodName(method).toString())) {
+-        return false;
+-      }
+-      curr = Trees.getMethodReceiver(method);
+-    }
+-    if (!(curr instanceof IdentifierTree)) {
+-      return false;
+-    }
+-    parts.addFirst(curr);
+-    visitDotWithPrefix(
+-        ImmutableList.copyOf(parts), false, ImmutableList.of(parts.size() - 1), INDEPENDENT);
+-    return true;
+-  }
+-
+-  private static final ImmutableSet<String> LOG_METHODS =
+-      ImmutableSet.of(
+-          "at",
+-          "atConfig",
+-          "atDebug",
+-          "atFine",
+-          "atFiner",
+-          "atFinest",
+-          "atInfo",
+-          "atMostEvery",
+-          "atSevere",
+-          "atWarning",
+-          "every",
+-          "log",
+-          "logVarargs",
+-          "perUnique",
+-          "withCause",
+-          "withStackTrace");
+-
+-  private static List<Long> handleStream(List<ExpressionTree> parts) {
+-    return indexes(
+-            parts.stream(),
+-            p -> {
+-              if (!(p instanceof MethodInvocationTree methodInvocationTree)) {
+-                return false;
+-              }
+-              Name name = getMethodName(methodInvocationTree);
+-              return Stream.of("stream", "parallelStream", "toBuilder")
+-                  .anyMatch(name::contentEquals);
+-            })
+-        .collect(toList());
+-  }
+-
+-  private static <T> Stream<Long> indexes(Stream<T> stream, Predicate<T> predicate) {
+-    return Streams.mapWithIndex(stream, (x, i) -> predicate.apply(x) ? i : -1).filter(x -> x != -1);
+-  }
+-
+   @Override
+   public Void visitMemberSelect(MemberSelectTree node, Void unused) {
+     sync(node);
+@@ -1936,7 +2692,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     return null;
+   }
+ 
+-  // TODO(cushon): is this worth special-casing?
++  /** Emits a single unnamed value directly, leaving any nested list layout to the value. */
+   private boolean visitSingleMemberAnnotation(AnnotationTree node) {
+     if (node.getArguments().size() != 1) {
+       return false;
+@@ -2016,7 +2772,15 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
                AllowLeadingBlankLine.NO,
                AllowTrailingBlankLine.NO);
          } else {
@@ -2265,7 +2584,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
            scan(node.getBody(), null);
            builder.close();
          }
-@@ -2091,7 +2927,14 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2091,7 +2855,14 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      builder.space();
      if (!node.getResources().isEmpty()) {
        token("(");
@@ -2281,7 +2600,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
        boolean afterFirstToken = false;
        for (Tree resource : node.getResources()) {
          if (afterFirstToken) {
-@@ -2101,7 +2944,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2101,7 +2872,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
  
            declareOne(
                DeclarationKind.PARAMETER,
@@ -2290,7 +2609,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
                Optional.of(variableTree.getModifiers()),
                variableTree.getType(),
                /* name= */ variableTree.getName(),
-@@ -2163,6 +3006,23 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2163,6 +2934,23 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      boolean hasSuperclassType = node.getExtendsClause() != null;
      boolean hasSuperInterfaceTypes = !node.getImplementsClause().isEmpty();
      boolean hasPermitsTypes = !permitsTypes.isEmpty();
@@ -2314,7 +2633,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      token(node.getKind() == Tree.Kind.INTERFACE ? "interface" : "class");
      builder.space();
      visit(node.getSimpleName());
-@@ -2176,16 +3036,21 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2176,16 +2964,21 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
              node.getTypeParameters(),
              hasSuperclassType || hasSuperInterfaceTypes || hasPermitsTypes ? plusFour : ZERO);
        }
@@ -2338,7 +2657,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      }
      builder.close();
      if (node.getMembers() == null) {
-@@ -2207,19 +3072,25 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2207,19 +3000,25 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
        token("extends");
        builder.open(plusFour);
        builder.breakOp(" ");
@@ -2367,7 +2686,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      }
      builder.close();
      return null;
-@@ -2351,7 +3222,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2351,7 +3150,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
        }
        default -> {
          builder.open(plusTwo);
@@ -2376,14 +2695,18 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
          scan(node, null);
          builder.close();
        }
-@@ -2691,33 +3562,38 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2689,35 +3488,40 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     visitAndBreakModifiers(
+         declaration.getModifiers(),
          Direction.HORIZONTAL,
-         /* declarationAnnotationBreak= */ Optional.empty());
-     List<? extends Tree> union = type.getTypeAlternatives();
+-        /* declarationAnnotationBreak= */ Optional.empty());
+-    List<? extends Tree> union = type.getTypeAlternatives();
 -    boolean afterFirstToken = false;
 -    for (int i = 0; i < union.size() - 1; i++) {
 -      if (afterFirstToken) {
 -        builder.breakOp(" ");
++        /* declarationAnnotationBreak= */ Optional.empty());
++    List<? extends Tree> union = type.getTypeAlternatives();
 +    int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
 +    for (int i = 0; i < union.size(); i++) {
 +      Tree alternative = union.get(i);
@@ -2438,7 +2761,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      builder.close();
    }
  
-@@ -2747,7 +3623,94 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2747,9 +3551,95 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
        return;
      }
      builder.open(ZERO);
@@ -2531,9 +2854,11 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +    int remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
 +    int remainingStructure = MAX_UNBROKEN_COMPLEXITY - precedingStructure;
      if (receiver.isPresent()) {
-       // TODO(user): Use builders.
+-      // TODO(user): Use builders.
        declareOne(
-@@ -2762,13 +3725,39 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+           DeclarationKind.PARAMETER,
+           Direction.HORIZONTAL,
+@@ -2762,13 +3652,39 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
            !parameters.isEmpty() ? Optional.of(",") : Optional.empty(),
            Optional.of(receiver.get().getNameExpression()),
            /* typeWithDims= */ Optional.empty());
@@ -2574,7 +2899,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
        visitToDeclare(
            DeclarationKind.PARAMETER,
            Direction.HORIZONTAL,
-@@ -2778,22 +3767,41 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2778,22 +3694,41 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
            i < parameters.size() - 1 ? Optional.of(",") : /* a= */ Optional.empty());
        afterFirstToken = true;
      }
@@ -2619,32 +2944,58 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
    }
  
    @Override
-@@ -3027,11 +4035,36 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -2990,13 +3925,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     builder.close();
+   }
+ 
+-  /** Collapse chains of {@code .} operators, across multiple {@link ASTNode} types. */
+-
+-  /**
+-   * Output a "." node.
+-   *
+-   * @param node0 the "." node
+-   */
++  /** Formats a dot chain across method calls, field accesses, and array accesses. */
+   private void visitDot(ExpressionTree node0) {
+     ExpressionTree node = node0;
+ 
+@@ -3010,8 +3939,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+         node = getArrayBase(node);
+       }
+       switch (node.getKind()) {
+-        case MEMBER_SELECT -> node = ((MemberSelectTree) node).getExpression();
+-        case METHOD_INVOCATION -> node = getMethodReceiver((MethodInvocationTree) node);
++        case MEMBER_SELECT, METHOD_INVOCATION -> node = chainReceiver(node);
+         case IDENTIFIER -> {
+           node = null;
+           break LOOP;
+@@ -3027,11 +3955,35 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      } while (node != null);
      List<ExpressionTree> items = new ArrayList<>(stack);
  
 +    int firstInvocationIndex = -1;
 +    for (int i = 0; i < items.size(); i++) {
-+      if (items.get(i).getKind() == METHOD_INVOCATION) {
++      if (getArrayBase(items.get(i)).getKind() == METHOD_INVOCATION) {
 +        firstInvocationIndex = i;
 +        break;
 +      }
 +    }
-+    int invocationCount = dereferenceInvocationCount(node0);
-+    if (brokenArgumentListDepth == 0 && isCallArgument(node0)) {
-+      invocationCount++;
++    int callCount = chainCallCount(node0);
++    boolean forceSelectorBreaks = 1 + 2 * callCount > MAX_UNBROKEN_COMPLEXITY;
++    if (callCount > 1 && layoutContext == LayoutContext.UNBROKEN) {
++      forceSelectorBreaks |= nestedChainWidthScore(node0) > ROW_BREAK_SCORE;
 +    }
-+    boolean forceSelectorBreaks = 1 + 2 * invocationCount > MAX_UNBROKEN_COMPLEXITY;
 +    if (node != null && !items.isEmpty()) {
 +      long selectorWidthScore =
-+          (long) memberLayoutWeight(items.get(0)) * (sourceWidth(getArrayBase(node)) + 2);
++          (long) memberLayoutWeight(items.get(0)) * (syntaxWidth(getArrayBase(node)) + 2);
 +      forceSelectorBreaks |= selectorWidthScore > ROW_BREAK_SCORE;
 +    }
 +
      boolean needDot = false;
  
-     // The dot chain started with a primary expression: output it normally, and indent
-     // the rest of the chain +4.
+-    // The dot chain started with a primary expression: output it normally, and indent
+-    // the rest of the chain +4.
++    // Emit a constructor, parenthesized expression, or other primary before its selector suffix.
      if (node != null) {
 +      ExpressionTree primary = getArrayBase(node);
 +      while (primary instanceof ParenthesizedTree parenthesized) {
@@ -2656,32 +3007,31 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
        // Exception: if it's an anonymous class declaration, we don't need to
        // break and indent after the trailing '}'.
        if (node.getKind() == NEW_CLASS && ((NewClassTree) node).getClassBody() != null) {
-@@ -3039,9 +4072,22 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3039,9 +3991,21 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
          scan(getArrayBase(node), null);
          token(".");
        } else {
++        LayoutContext previousContext = layoutContext;
 +        if (forceSelectorBreaks) {
-+          widthBreakSuppressionDepth++;
++          layoutContext = LayoutContext.BROKEN_CHAIN;
 +        }
 +        try {
 +          scan(getArrayBase(node), null);
 +        } finally {
-+          if (forceSelectorBreaks) {
-+            widthBreakSuppressionDepth--;
-+          }
++          layoutContext = previousContext;
 +        }
          builder.open(plusFour);
 -        scan(getArrayBase(node), null);
 -        builder.breakOp();
 +        FillMode fillMode = node.getKind() == NEW_CLASS ? UNIFIED : INDEPENDENT;
-+        if (breakAfterPrimary || (forceSelectorBreaks && node.getKind() == NEW_CLASS)) {
++        if (breakAfterPrimary || (forceSelectorBreaks && chainCallCount(node) > 0)) {
 +          fillMode = FillMode.FORCED;
 +        }
 +        builder.breakOp(fillMode, "", ZERO);
          needDot = true;
        }
        formatArrayIndices(getArrayIndices(node));
-@@ -3057,23 +4103,6 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3057,41 +4021,8 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      // treat the type name-shaped part as a single syntactic unit.
      TypeNameClassifier.typePrefixLength(simpleNames(stack)).ifPresent(prefixes::add);
  
@@ -2702,35 +3052,59 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 -      }
 -    }
 -
-     // If there's only one invocation, treat leading field accesses as a single
-     // unit. In the normal case we want to preserve the alignment of subsequent
-     // method calls, and would emit e.g.:
-@@ -3104,11 +4133,18 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+-    // If there's only one invocation, treat leading field accesses as a single
+-    // unit. In the normal case we want to preserve the alignment of subsequent
+-    // method calls, and would emit e.g.:
+-    //
+-    // myField
+-    //     .foo()
+-    //     .bar();
+-    //
+-    // But if there's no 'bar()' to worry about the alignment of we prefer:
+-    //
+-    // myField.foo();
+-    //
+-    // to:
+-    //
+-    // myField
+-    //     .foo();
+-    //
+-    if (invocationCount == 1 && firstInvocationIndex > 0) {
++    // With only one call, keep its leading fields together instead of isolating a lone selector.
++    if (callCount == 1 && firstInvocationIndex > 0) {
+       prefixes.add(firstInvocationIndex);
+     }
  
-     List<Long> streamPrefixes = handleStream(items);
-     streamPrefixes.forEach(x -> prefixes.add(x.intValue()));
+@@ -3102,13 +4033,12 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       }
+     }
+ 
+-    List<Long> streamPrefixes = handleStream(items);
+-    streamPrefixes.forEach(x -> prefixes.add(x.intValue()));
 +    Indent chainIndent =
 +        forceSelectorBreaks || variableInitializer != node0 ? plusFour : ZERO;
      if (!prefixes.isEmpty()) {
-       visitDotWithPrefix(
+-      visitDotWithPrefix(
 -          items, needDot, prefixes, streamPrefixes.isEmpty() ? INDEPENDENT : UNIFIED);
-+          items,
-+          needDot,
-+          prefixes,
-+          streamPrefixes.isEmpty() ? INDEPENDENT : UNIFIED,
-+          chainIndent,
-+          forceSelectorBreaks);
++      visitDotWithPrefix(items, needDot, prefixes, chainIndent, forceSelectorBreaks);
      } else {
 -      visitRegularDot(items, needDot);
 +      visitRegularDot(items, needDot, chainIndent, forceSelectorBreaks);
      }
  
      if (node != null) {
-@@ -3122,20 +4158,38 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
-    * @param items in the chain
-    * @param needDot whether a leading dot is needed
-    */
+@@ -3116,38 +4046,56 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     }
+   }
+ 
+-  /**
+-   * Output a "regular" chain of dereferences, possibly in builder-style. Break before every dot.
+-   *
+-   * @param items in the chain
+-   * @param needDot whether a leading dot is needed
+-   */
 -  private void visitRegularDot(List<ExpressionTree> items, boolean needDot) {
++  /** Emits a chain without a grouped qualifier prefix, aligning selectors when possible. */
 +  private void visitRegularDot(
 +      List<ExpressionTree> items,
 +      boolean needDot,
@@ -2739,72 +3113,122 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      boolean trailingDereferences = items.size() > 1;
      boolean needDot0 = needDot;
 +    BreakTag firstSelector = genSym();
-+    boolean alignSelectors = !needDot0 && trailingDereferences;
++    boolean alignSelectors =
++        !needDot0 && trailingDereferences && items.get(0) instanceof IdentifierTree;
      if (!needDot0) {
 -      builder.open(plusFour);
+-    }
+-    // don't break after the first element if it is every small, unless the
+-    // chain starts with another expression
+-    int minLength = indentMultiplier * 4;
+-    int length = needDot0 ? minLength : 0;
 +      builder.open(
 +          alignSelectors
 +              ? Indent.Align.toBreakColumn(firstSelector, maximumAlignment, chainIndent)
 +              : chainIndent);
-     }
--    // don't break after the first element if it is every small, unless the
-+    // don't break after the first element if it is very small, unless the
-     // chain starts with another expression
-     int minLength = indentMultiplier * 4;
-     int length = needDot0 ? minLength : 0;
++    }
 +    BreakTag currentChainBreak = genSym();
 +    boolean beforeFirstSelector = true;
++    // Keep leading fields with the receiver; forced selector breaks start after the first call.
++    boolean hasInvocation = false;
      for (ExpressionTree e : items) {
        if (needDot) {
 -        if (length > minLength) {
 -          builder.breakOp(FillMode.UNIFIED, "", ZERO);
 +        if (beforeFirstSelector) {
-+          builder.breakOp(INDEPENDENT, "", ZERO, Optional.of(firstSelector));
-+          beforeFirstSelector = false;
-+        } else if (length > minLength) {
 +          builder.breakOp(
-+              forceSelectorBreaks ? FillMode.FORCED : FillMode.UNIFIED,
++              forceSelectorBreaks && hasInvocation ? FillMode.FORCED : INDEPENDENT,
++              "", ZERO, Optional.of(firstSelector));
++          beforeFirstSelector = false;
++        } else {
++          builder.breakOp(
++              forceSelectorBreaks && hasInvocation ? FillMode.FORCED : FillMode.UNIFIED,
 +              "",
 +              ZERO,
 +              Optional.of(currentChainBreak));
          }
          token(".");
-         length++;
-@@ -3144,8 +4198,14 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
-         BreakTag tyargTag = genSym();
-         dotExpressionUpToArgs(e, Optional.of(tyargTag));
-         Indent tyargIndent = Indent.If.make(tyargTag, plusFour, ZERO);
--        dotExpressionArgsAndParen(
--            e, tyargIndent, (trailingDereferences || needDot) ? plusFour : ZERO);
-+        BreakTag previousChainBreak = chainBreak;
-+        chainBreak = currentChainBreak;
-+        try {
-+          dotExpressionArgsAndParen(
-+              e, tyargIndent, (trailingDereferences || needDot) ? plusFour : ZERO);
-+        } finally {
-+          chainBreak = previousChainBreak;
-+        }
+-        length++;
        }
-       length += getLength(e, getCurrentPath());
+-      if (!fillFirstArgument(e, items, trailingDereferences ? ZERO : minusFour)) {
+-        BreakTag tyargTag = genSym();
+-        dotExpressionUpToArgs(e, Optional.of(tyargTag));
+-        Indent tyargIndent = Indent.If.make(tyargTag, plusFour, ZERO);
++      BreakTag tyargTag = genSym();
++      dotExpressionUpToArgs(e, Optional.of(tyargTag));
++      Indent tyargIndent = Indent.If.make(tyargTag, plusFour, ZERO);
++      BreakTag previousChainBreak = chainBreak;
++      chainBreak = currentChainBreak;
++      try {
+         dotExpressionArgsAndParen(
+-            e, tyargIndent, (trailingDereferences || needDot) ? plusFour : ZERO);
++            e, tyargIndent, (trailingDereferences || needDot) ? plusFour : ZERO,
++            forceSelectorBreaks);
++      } finally {
++        chainBreak = previousChainBreak;
+       }
+-      length += getLength(e, getCurrentPath());
++      hasInvocation |= getArrayBase(e) instanceof MethodInvocationTree;
        needDot = true;
-@@ -3206,10 +4266,26 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     }
+     if (!needDot0) {
+@@ -3155,61 +4103,21 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     }
+   }
+ 
+-  // avoid formattings like:
+-  //
+-  // when(
+-  //         something
+-  //             .happens())
+-  //     .thenReturn(result);
+-  //
+-  private boolean fillFirstArgument(ExpressionTree e, List<ExpressionTree> items, Indent indent) {
+-    // is there a trailing dereference?
+-    if (items.size() < 2) {
+-      return false;
+-    }
+-    // don't special-case calls nested inside expressions
+-    if (e.getKind() != METHOD_INVOCATION) {
+-      return false;
+-    }
+-    MethodInvocationTree methodInvocation = (MethodInvocationTree) e;
+-    Name name = getMethodName(methodInvocation);
+-    if (!(methodInvocation.getMethodSelect() instanceof IdentifierTree)
+-        || name.length() > 4
+-        || !methodInvocation.getTypeArguments().isEmpty()
+-        || methodInvocation.getArguments().size() != 1) {
+-      return false;
+-    }
+-    builder.open(ZERO);
+-    builder.open(indent);
+-    visit(name);
+-    token("(");
+-    ExpressionTree arg = getOnlyElement(methodInvocation.getArguments());
+-    scan(arg, null);
+-    builder.close();
+-    token(")");
+-    builder.close();
+-    return true;
+-  }
+-
+   /**
+-   * Output a chain of dereferences where some prefix should be treated as a single syntactic unit,
+-   * either because it looks like a type name or because there is only a single method invocation in
+-   * the chain.
++   * Groups type-like or single-call qualifier prefixes while allowing later selectors to break.
+    *
+-   * @param items in the chain
+-   * @param needDot whether a leading dot is needed
+-   * @param prefixes the terminal indices of 'prefixes' of the expression that should be treated as
+-   *     a syntactic unit
++   * @param prefixes the final item index of each qualifier group
+    */
+   private void visitDotWithPrefix(
+       List<ExpressionTree> items,
        boolean needDot,
        Collection<Integer> prefixes,
-       FillMode prefixFillMode) {
-+    visitDotWithPrefix(
-+        items,
-+        needDot,
-+        prefixes,
-+        prefixFillMode,
-+        plusFour,
-+        /* forceSelectorBreaks= */ false);
-+  }
-+
-+  private void visitDotWithPrefix(
-+      List<ExpressionTree> items,
-+      boolean needDot,
-+      Collection<Integer> prefixes,
-+      FillMode prefixFillMode,
+-      FillMode prefixFillMode) {
 +      Indent chainIndent,
 +      boolean forceSelectorBreaks) {
      // Are there method invocations or field accesses after the prefix?
@@ -2815,16 +3239,19 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      for (int times = 0; times < prefixes.size(); times++) {
        builder.open(ZERO);
      }
-@@ -3223,7 +4299,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3221,9 +4129,9 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       if (needDot) {
+         FillMode fillMode;
          if (!unconsumedPrefixes.isEmpty() && i <= unconsumedPrefixes.peekFirst()) {
-           fillMode = prefixFillMode;
+-          fillMode = prefixFillMode;
++          fillMode = INDEPENDENT;
          } else {
 -          fillMode = FillMode.UNIFIED;
 +          fillMode = forceSelectorBreaks ? FillMode.FORCED : FillMode.UNIFIED;
          }
  
          builder.breakOp(fillMode, "", ZERO, Optional.of(nameTag));
-@@ -3238,7 +4314,13 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3238,7 +4146,13 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
  
        Indent tyargIndent = Indent.If.make(tyargTag, plusFour, ZERO);
        Indent argsIndent = Indent.If.make(nameTag, plusFour, trailingDereferences ? plusFour : ZERO);
@@ -2832,160 +3259,251 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +      BreakTag previousChainBreak = chainBreak;
 +      chainBreak = nameTag;
 +      try {
-+        dotExpressionArgsAndParen(e, tyargIndent, argsIndent);
++        dotExpressionArgsAndParen(e, tyargIndent, argsIndent, forceSelectorBreaks);
 +      } finally {
 +        chainBreak = previousChainBreak;
 +      }
  
        needDot = true;
      }
-@@ -3246,6 +4328,44 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3246,6 +4160,78 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      builder.close();
    }
  
 +  private static boolean exceedsUnbrokenChainComplexity(ExpressionTree expression) {
-+    return 1 + 2 * dereferenceInvocationCount(expression) > MAX_UNBROKEN_COMPLEXITY;
++    return 1 + 2 * chainCallCount(expression) > MAX_UNBROKEN_COMPLEXITY;
 +  }
 +
-+  private static int dereferenceInvocationCount(ExpressionTree expression) {
-+    int invocationCount = 0;
-+    while (expression instanceof MethodInvocationTree invocation) {
-+      ExpressionTree receiver = getMethodReceiver(invocation);
-+      if (receiver == null) {
-+        break;
++  private static int chainCallCount(ExpressionTree expression) {
++    int count = 0;
++    while (expression != null) {
++      if (expression instanceof MethodInvocationTree || expression instanceof NewClassTree) {
++        count++;
 +      }
-+      invocationCount++;
++      expression = chainReceiver(expression);
++    }
++    return count;
++  }
++
++  // Follow the value carrying the chain, not calls inside arguments, array indices, or cast types.
++  private static ExpressionTree chainReceiver(ExpressionTree expression) {
++    return switch (expression) {
++      case MethodInvocationTree invocation -> getMethodReceiver(invocation);
++      case MemberSelectTree select -> select.getExpression();
++      case ParenthesizedTree parenthesized -> parenthesized.getExpression();
++      case ArrayAccessTree access -> access.getExpression();
++      case TypeCastTree cast -> cast.getExpression();
++      default -> null;
++    };
++  }
++
++  private long nestedChainWidthScore(ExpressionTree expression) {
++    Tree call = enclosingCall(expression);
++    // Include the opening '(' and, for constructors, the 'new ' prefix.
++    int prefixWidth = switch (call) {
++      case MethodInvocationTree invocation -> syntaxWidth(invocation.getMethodSelect()) + 1;
++      case NewClassTree creation -> syntaxWidth(creation.getIdentifier()) + 5;
++      case null, default -> 0;
++    };
++    if (prefixWidth == 0) {
++      return 0;
++    }
++    // Measure from the enclosing call to each selector, excluding the selector's own width.
++    // Do not charge sibling arguments again: the enclosing list has already scored them.
++    long score = 0;
++    while (expression != null) {
++      ExpressionTree receiver = chainReceiver(expression);
++      if (expression instanceof MethodInvocationTree || expression instanceof MemberSelectTree) {
++        int distance = prefixWidth + (receiver == null ? 0 : syntaxWidth(receiver) + 1);
++        score += (long) memberLayoutWeight(expression) * distance;
++      } else if (expression instanceof NewClassTree) {
++        score += (long) memberLayoutWeight(expression) * prefixWidth;
++      }
 +      expression = receiver;
 +    }
-+    return invocationCount;
++    return score;
 +  }
 +
-+  private boolean isCallArgument(ExpressionTree expression) {
-+    TreePath path = getCurrentPath();
-+    if (path == null || path.getLeaf() != expression) {
-+      return false;
-+    }
-+    while (path.getParentPath() != null
-+        && path.getParentPath().getLeaf() instanceof ParenthesizedTree parenthesized
-+        && parenthesized.getExpression() == path.getLeaf()) {
-+      path = path.getParentPath();
-+    }
-+    if (path.getParentPath() == null) {
-+      return false;
-+    }
-+    Tree parent = path.getParentPath().getLeaf();
-+    return switch (parent) {
-+      case MethodInvocationTree invocation -> invocation.getArguments().contains(path.getLeaf());
-+      case NewClassTree construction -> construction.getArguments().contains(path.getLeaf());
-+      default -> false;
++  private Tree enclosingCall(ExpressionTree expression) {
++    List<? extends ExpressionTree> arguments = switch (argumentOwner) {
++      case MethodInvocationTree invocation -> invocation.getArguments();
++      case NewClassTree construction -> construction.getArguments();
++      case null, default -> List.of();
 +    };
++    // Only a direct argument (possibly parenthesized) pays for the enclosing call's prefix.
++    for (ExpressionTree argument : arguments) {
++      while (argument instanceof ParenthesizedTree parenthesized) {
++        argument = parenthesized.getExpression();
++      }
++      if (argument == expression) {
++        return argumentOwner;
++      }
++    }
++    return null;
 +  }
 +
    /** Returns the simple names of expressions in a "." chain. */
    private static ImmutableList<String> simpleNames(Deque<ExpressionTree> stack) {
      ImmutableList.Builder<String> simpleNames = ImmutableList.builder();
-@@ -3321,7 +4441,10 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3284,7 +4270,6 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+         if (!methodInvocation.getTypeArguments().isEmpty()) {
+           builder.open(plusFour);
+           addTypeArguments(methodInvocation.getTypeArguments(), ZERO);
+-          // TODO(user): Should indent the name -4.
+           builder.breakOp(Doc.FillMode.UNIFIED, "", ZERO, tyargTag);
+           builder.close();
+         }
+@@ -3314,14 +4299,22 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+   }
+ 
+   private void dotExpressionArgsAndParen(
+-      ExpressionTree expression, Indent tyargIndent, Indent indent) {
++      ExpressionTree expression, Indent tyargIndent, Indent indent, boolean ownsLayout) {
+     Deque<ExpressionTree> indices = getArrayIndices(expression);
+     expression = getArrayBase(expression);
+     switch (expression.getKind()) {
        case METHOD_INVOCATION -> {
          builder.open(tyargIndent);
          MethodInvocationTree methodInvocation = (MethodInvocationTree) expression;
 -        addArguments(methodInvocation.getArguments(), indent);
-+        addArguments(
-+            methodInvocation.getArguments(),
-+            indent,
-+            usesFormatStringLayout(methodInvocation));
++        LayoutContext previousContext = layoutContext;
++        if (ownsLayout) {
++          layoutContext = LayoutContext.BROKEN_CHAIN;
++        }
++        try {
++          addArguments(methodInvocation, methodInvocation.getArguments(), indent);
++        } finally {
++          layoutContext = previousContext;
++        }
          builder.close();
        }
        default -> {}
-@@ -3386,10 +4509,18 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3357,7 +4350,6 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     return indices;
+   }
+ 
+-  /** Helper methods for method invocations. */
+   private void addTypeArguments(List<? extends Tree> typeArguments, Indent plusIndent) {
+     if (typeArguments == null || typeArguments.isEmpty()) {
+       return;
+@@ -3378,125 +4370,144 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+   }
+ 
+   /**
+-   * Add arguments to a method invocation, etc. The arguments indented {@code plusFour}, filled,
+-   * from the current indent. The arguments may be output two at a time if they seem to be arguments
+-   * to a map constructor, etc.
++   * Add arguments to a method invocation or constructor. Authored two-column tables keep their
++   * rows; other lists use the shared flat, wrapped, or broken layout plan.
+    *
++   * @param owner the invocation or constructor that owns the arguments
+    * @param arguments the arguments
     * @param plusIndent the extra indent for the arguments
     */
-   private void addArguments(List<? extends ExpressionTree> arguments, Indent plusIndent) {
+-  private void addArguments(List<? extends ExpressionTree> arguments, Indent plusIndent) {
 -    builder.open(plusIndent);
-+    addArguments(arguments, plusIndent, /* useFormatStringLayout= */ false);
++  private void addArguments(Tree owner, List<? extends ExpressionTree> arguments, Indent plusIndent) {
++    Tree previousOwner = argumentOwner;
++    argumentOwner = owner;
++    try {
++      emitArguments(arguments, plusIndent);
++    } finally {
++      argumentOwner = previousOwner;
++    }
 +  }
 +
-+  private void addArguments(
-+      List<? extends ExpressionTree> arguments,
-+      Indent plusIndent,
-+      boolean useFormatStringLayout) {
++  private void emitArguments(List<? extends ExpressionTree> arguments, Indent plusIndent) {
 +    builder.open(ZERO);
      token("(");
      if (!arguments.isEmpty()) {
        if (arguments.size() % 2 == 0 && argumentsAreTabular(arguments) == 2) {
-+        builder.open(plusIndent);
-         builder.forcedBreak();
-         builder.open(ZERO);
-         boolean afterFirstToken = false;
-@@ -3409,40 +4540,139 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
-           afterFirstToken = true;
+-        builder.forcedBreak();
+-        builder.open(ZERO);
+-        boolean afterFirstToken = false;
+-        for (int i = 0; i < arguments.size() - 1; i += 2) {
+-          ExpressionTree argument0 = arguments.get(i);
+-          ExpressionTree argument1 = arguments.get(i + 1);
+-          if (afterFirstToken) {
+-            token(",");
+-            builder.forcedBreak();
+-          }
+-          builder.open(plusFour);
+-          scan(argument0, null);
++        tabularArgList(arguments);
++      } else {
++        argList(arguments, plusIndent);
++      }
++    }
++    token(")");
++    builder.close();
++  }
++
++  private void tabularArgList(List<? extends ExpressionTree> arguments) {
++    LayoutContext previousContext = layoutContext;
++    layoutContext = layoutContext.inBrokenList();
++    try {
++      builder.open(plusFour);
++      builder.forcedBreak();
++      builder.open(ZERO);
++      boolean afterFirstToken = false;
++      Iterator<? extends ExpressionTree> iterator = arguments.iterator();
++      while (iterator.hasNext()) {
++        if (afterFirstToken) {
+           token(",");
+-          builder.breakOp(" ");
+-          scan(argument1, null);
+-          builder.close();
+-          afterFirstToken = true;
++          builder.forcedBreak();
          }
-         builder.close();
+-        builder.close();
 -      } else if (isFormatMethod(arguments)) {
-+        builder.close();
-+      } else if (useFormatStringLayout) {
-+        builder.open(plusIndent);
-         builder.breakOp();
-         builder.open(ZERO);
-         scan(arguments.get(0), null);
+-        builder.breakOp();
+-        builder.open(ZERO);
+-        scan(arguments.get(0), null);
++        builder.open(plusFour);
++        scan(iterator.next(), null);
          token(",");
--        builder.breakOp(" ");
-+        BreakTag argumentStart = genSym();
-+        builder.breakOp(UNIFIED, " ", ZERO, Optional.of(argumentStart));
-         builder.open(ZERO);
+         builder.breakOp(" ");
+-        builder.open(ZERO);
 -        argList(arguments.subList(1, arguments.size()));
-+        argList(
-+            arguments.subList(1, arguments.size()),
-+            ZERO,
-+            MAX_UNBROKEN_COMPLEXITY - memberComplexity(arguments.get(0)),
-+            new ArrayList<>(List.of(argumentStart)));
-+        builder.close();
+-        builder.close();
++        scan(iterator.next(), null);
          builder.close();
-         builder.close();
++        afterFirstToken = true;
++      }
++      builder.close();
++      builder.close();
++    } finally {
++      layoutContext = previousContext;
++    }
++  }
++
++  private void argList(List<? extends ExpressionTree> arguments, Indent plusIndent) {
++    ListPlan plan = argumentListPlan(arguments);
++    LayoutContext previousContext = layoutContext;
++    if (plan.ownsLayout()) {
++      layoutContext = layoutContext.inBrokenList();
++    }
++    try {
++      if (plan.layout() == ListLayout.BROKEN) {
++        brokenArgList(arguments);
        } else {
 -        builder.breakOp();
 -        argList(arguments);
-+        argList(arguments, plusIndent);
++        emitArgList(arguments, plusIndent, plan.breakIndex());
        }
++    } finally {
++      layoutContext = previousContext;
      }
-     token(")");
-     builder.close();
+-    token(")");
+-    builder.close();
    }
  
 -  private void argList(List<? extends ExpressionTree> arguments) {
 -    builder.open(ZERO);
 -    boolean afterFirstToken = false;
 -    FillMode fillMode = hasOnlyShortItems(arguments) ? FillMode.INDEPENDENT : FillMode.UNIFIED;
-+  private void argList(List<? extends ExpressionTree> arguments, Indent plusIndent) {
-+    ListLayout layout = argumentListLayout(arguments);
-+    int widthBreakIndex =
-+        layout == ListLayout.WRAPPED
-+            ? preferredWrappedBreakIndex(
-+                arguments, argumentListStructuralBreakIndex(arguments))
-+            : -1;
-+    boolean containsNestedBlock =
-+        arguments.stream().anyMatch(JavaInputAstVisitor::containsNestedBlock);
-+    boolean breaksStructurally = layout != ListLayout.FLAT || containsNestedBlock;
-+    if (breaksStructurally) {
-+      brokenArgumentListDepth++;
-+    }
-+    try {
-+      if (layout == ListLayout.BROKEN) {
-+        brokenArgList(arguments);
-+      } else {
-+        argList(
-+            arguments,
-+            plusIndent,
-+            layout == ListLayout.FLAT ? Integer.MAX_VALUE : MAX_UNBROKEN_COMPLEXITY,
-+            new ArrayList<>(),
-+            widthBreakIndex);
-+      }
-+    } finally {
-+      if (breaksStructurally) {
-+        brokenArgumentListDepth--;
-+      }
-+    }
-+  }
-+
 +  private void brokenArgList(List<? extends ExpressionTree> arguments) {
 +    builder.open(plusFour);
 +    builder.forcedBreak();
@@ -3004,35 +3522,66 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      builder.close();
    }
  
-+  private void argList(
-+      List<? extends ExpressionTree> arguments,
-+      Indent plusIndent,
-+      int remainingComplexity,
-+      List<BreakTag> previousBreaks) {
-+    argList(arguments, plusIndent, remainingComplexity, previousBreaks, -1);
-+  }
-+
-+  private void argList(
-+      List<? extends ExpressionTree> arguments,
-+      Indent plusIndent,
-+      int remainingComplexity,
-+      List<BreakTag> previousBreaks,
-+      int widthBreakIndex) {
+-  /**
+-   * Identifies String formatting methods like {@link String#format} which we prefer to format as:
+-   *
+-   * <pre>{@code
+-   * String.format(
+-   *     "the format string: %s %s %s",
+-   *     arg, arg, arg);
+-   * }</pre>
+-   *
+-   * <p>And not:
+-   *
+-   * <pre>{@code
+-   * String.format(
+-   *     "the format string: %s %s %s",
+-   *     arg,
+-   *     arg,
+-   *     arg);
+-   * }</pre>
+-   */
+-  private boolean isFormatMethod(List<? extends ExpressionTree> arguments) {
+-    if (arguments.size() < 2) {
+-      return false;
+-    }
+-    return isStringConcat(arguments.get(0));
+-  }
+-
+-  private static final Pattern FORMAT_SPECIFIER = Pattern.compile("%|\\{[0-9]\\}");
+-
+-  private boolean isStringConcat(ExpressionTree first) {
+-    final boolean[] stringLiteral = {true};
+-    final boolean[] formatString = {false};
+-    new TreeScanner() {
+-      @Override
+-      public void scan(JCTree tree) {
+-        if (tree == null) {
+-          return;
+-        }
+-        switch (tree.getKind()) {
+-          case STRING_LITERAL -> {}
+-          case PLUS -> super.scan(tree);
+-          default -> stringLiteral[0] = false;
++  private void emitArgList(
++      List<? extends ExpressionTree> arguments, Indent plusIndent, int breakIndex) {
++    List<BreakTag> previousBreaks = new ArrayList<>();
 +    boolean afterFirstToken = false;
 +    boolean continuationOpen = false;
-+    for (int i = 0; i < arguments.size(); i++) {
-+      ExpressionTree argument = arguments.get(i);
-+      int complexity = argumentListMemberComplexity(argument);
++    int index = 0;
++    for (ExpressionTree argument : arguments) {
 +      BreakTag currentArgumentBreak = argumentBreak;
 +      if (afterFirstToken) {
-+        boolean breakBeforeArgument =
-+            i == widthBreakIndex
-+                || containsNestedBlock(argument)
-+                || (widthBreakIndex < 0 && complexity > remainingComplexity);
++        boolean breakBeforeArgument = index == breakIndex || containsNestedBlock(argument);
 +        if (breakBeforeArgument && continuationOpen) {
 +          builder.close();
 +          continuationOpen = false;
-+        }
+         }
+-        if (tree.getKind() == STRING_LITERAL) {
+-          Object value = ((LiteralTree) tree).getValue();
+-          if (value instanceof String string && FORMAT_SPECIFIER.matcher(string).find()) {
+-            formatString[0] = true;
+-          }
 +        token(",");
 +        currentArgumentBreak = genSym();
 +        if (breakBeforeArgument) {
@@ -3040,17 +3589,17 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +          continuationOpen = true;
 +          builder.breakOp(
 +              Doc.FillMode.FORCED, "", ZERO, Optional.of(currentArgumentBreak));
-+          remainingComplexity = MAX_UNBROKEN_COMPLEXITY;
 +        } else {
 +          builder.breakOp(
 +              INDEPENDENT,
 +              " ",
 +              preservePreviousIndent(previousBreaks, plusIndent),
 +              Optional.of(currentArgumentBreak));
-+        }
+         }
 +        previousBreaks.add(currentArgumentBreak);
-+      }
-+      remainingComplexity -= complexity;
+       }
+-    }.scan((JCTree) first);
+-    return stringLiteral[0] && formatString[0];
 +      BreakTag previousArgumentBreak = argumentBreak;
 +      argumentBreak = currentArgumentBreak;
 +      try {
@@ -3059,33 +3608,37 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
 +        argumentBreak = previousArgumentBreak;
 +      }
 +      afterFirstToken = true;
++      index++;
 +    }
 +    if (continuationOpen) {
 +      builder.close();
 +    }
-+  }
-+
-   /**
-    * Identifies String formatting methods like {@link String#format} which we prefer to format as:
-    *
-@@ -3462,11 +4692,13 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
-    *     arg);
-    * }</pre>
-    */
--  private boolean isFormatMethod(List<? extends ExpressionTree> arguments) {
--    if (arguments.size() < 2) {
-+  private boolean usesFormatStringLayout(MethodInvocationTree invocation) {
-+    String methodName = getMethodName(invocation).toString();
-+    if (!methodName.equals("format") && !methodName.equals("printf")) {
-       return false;
-     }
--    return isStringConcat(arguments.get(0));
-+    List<? extends ExpressionTree> arguments = invocation.getArguments();
-+    return arguments.size() >= 2 && isStringConcat(arguments.get(0));
    }
  
-   private static final Pattern FORMAT_SPECIFIER = Pattern.compile("%|\\{[0-9]\\}");
-@@ -3715,8 +4947,18 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+-  /** Returns the number of columns if the arguments arg laid out in a grid, or else {@code -1}. */
++  /** Returns the column count for an authored table, or {@code -1} if the rows do not form a table. */
+   private int argumentsAreTabular(List<? extends ExpressionTree> arguments) {
+     if (arguments.isEmpty()) {
+       return -1;
+@@ -3531,6 +4542,8 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       rows.add(row);
+     }
+     int size0 = rows.get(0).size();
++    // Require matching kinds in the first column and a majority match in later columns, so an
++    // ordinary wrapped list is less likely to be mistaken for a deliberate table.
+     if (!expressionsAreParallel(rows, 0, rows.size())) {
+       return -1;
+     }
+@@ -3546,7 +4559,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+       }
+       return -1;
+     }
+-    // allow a ragged trailing row for >= 3 columns
++    // With three or more rows, allow a shorter final row.
+     for (int i = 1; i < rows.size() - 1; i++) {
+       if (size0 != rows.get(i).size()) {
+         return -1;
+@@ -3715,8 +4728,18 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
          } else {
            builder.open(Indent.If.make(typeBreak, plusFour, ZERO));
            {
@@ -3106,7 +3659,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
            }
            builder.close();
          }
-@@ -3902,9 +5144,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3902,9 +4925,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
  
          if (bodyDeclaration.getKind() == VARIABLE) {
            visitVariables(
@@ -3117,7 +3670,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
          } else {
            scan(bodyDeclaration, null);
          }
-@@ -3924,21 +5164,38 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3924,21 +4945,38 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      }
    }
  
@@ -3159,7 +3712,22 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
        afterFirstToken = true;
      }
      builder.close();
-@@ -4031,11 +5288,8 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -3978,13 +5016,7 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+     for (int i = toksBefore.size() - 1; i >= 0; i--) {
+       Input.Tok tok = toksBefore.get(i);
+       String text = tok.getText();
+-      // TODO: consider making earlier versions behave compatibly. Prior to Java 23, there are no
+-      // markdown javadoc comments, and /// is just a regular // comment that happens to start with
+-      // an additional slash. As of Java 23, /// is markdown javadoc, and all consecutive /// lines
+-      // are part of the same javac token. To ensure consistent formatting before and after this
+-      // change, we would have to merge /// lines in a compatible way, including when we are
+-      // extracting their text to make a comment that might be reformatted.
+-      if (text.startsWith("/**") || (Runtime.version().feature() >= 23 && text.startsWith("///"))) {
++      if (text.startsWith("/**") || text.startsWith("///")) {
+         return OptionalInt.of(tok.getPosition());
+       }
+     }
+@@ -4031,11 +5063,8 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
          : Direction.VERTICAL;
    }
  
@@ -3173,7 +3741,7 @@ index 30d24252b38321d12fa31550aac5c536d3ed91be..ceb4df3bd8b5c88eee2a467baa411d24
      for (AnnotationTree annotation : modifiers.getAnnotations()) {
        if (!annotation.getArguments().isEmpty()) {
          return Direction.VERTICAL;
-@@ -4156,20 +5410,51 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
+@@ -4156,20 +5185,51 @@ class JavaInputAstVisitor extends TreePathScanner<Void, Void> {
      return null;
    }
  

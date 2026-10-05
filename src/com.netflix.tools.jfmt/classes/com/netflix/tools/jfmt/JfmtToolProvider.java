@@ -110,7 +110,9 @@ public class JfmtToolProvider implements ToolProvider, OptionChecker {
             return 1;
         }
 
-        JfmtFormatter formatter = new JfmtFormatter();
+        JfmtFormatter formatter = options.maxLineLength().isPresent()
+                ? new JfmtFormatter(options.maxLineLength().getAsInt())
+                : new JfmtFormatter();
 
         if (moduleSourcePaths.isEmpty() && options.files().size() == 1 && "-".equals(options.files()
                 .getFirst())) {

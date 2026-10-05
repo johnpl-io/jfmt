@@ -41,6 +41,7 @@ final class JfmtCommandLine {
     private final ToolOption release = option("--release", "RELEASE", "Compile for the specified Java SE release");
     private final ToolOption source = option("--source", "RELEASE", "Use the specified source release", "-source");
     private final ToolOption enablePreview = flag("--enable-preview", "Enable preview language features");
+    private final ToolOption maxLineLength = option("--max-line-length", "COLUMNS", "Break code to fit within the specified line length");
     private final ToolOption check = flag("--check", "Check formatting without changing files");
     private final ToolOption help = flag("--help", "Print this help message", "-h", "-?");
     private final CommandLine commandLine = CommandLine.builder()
@@ -61,6 +62,7 @@ final class JfmtCommandLine {
                     release,
                     source,
                     enablePreview,
+                    maxLineLength,
                     check,
                     help)
             .operand("FILE", "Java source file, or - for standard input", Cardinality.ZERO_OR_MORE)
@@ -116,12 +118,29 @@ final class JfmtCommandLine {
         if (parsed.contains(enablePreview)) {
             compilerOptions.add("--enable-preview");
         }
-        return new Options(parsed.contains(check), parsed.values(moduleSourcePath), selectedModules,
-                List.copyOf(compilerOptions), parsed.operands(), parsed.contains(help));
+        return new Options(parsed.contains(check), lineLength(parsed.values(maxLineLength)),
+                parsed.values(moduleSourcePath), selectedModules, List.copyOf(compilerOptions),
+                parsed.operands(), parsed.contains(help));
     }
 
-    record Options(boolean check, List<String> moduleSourcePaths, String modules,
-                   List<String> compilerOptions, List<String> files, boolean help) {}
+    record Options(boolean check, OptionalInt maxLineLength, List<String> moduleSourcePaths,
+                   String modules, List<String> compilerOptions, List<String> files, boolean help) {}
+
+    private static OptionalInt lineLength(List<String> values) {
+        if (values.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        String value = values.getLast();
+        try {
+            int length = Integer.parseInt(value);
+            if (length > 0) {
+                return OptionalInt.of(length);
+            }
+        } catch (NumberFormatException e) {
+            // Reported below.
+        }
+        throw new IllegalArgumentException("invalid line length: " + value);
+    }
 
     private static void addLast(List<String> result, String option, List<String> values) {
         if (!values.isEmpty()) {

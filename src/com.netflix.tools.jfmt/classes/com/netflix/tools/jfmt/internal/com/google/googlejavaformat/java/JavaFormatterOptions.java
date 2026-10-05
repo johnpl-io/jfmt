@@ -19,7 +19,18 @@ import com.netflix.tools.jfmt.internal.com.google.errorprone.annotations.Immutab
 
 /** Options for jfmt's integrated google-java-format engine. */
 @Immutable
-public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifiers) {
+public record JavaFormatterOptions(
+    boolean formatJavadoc, boolean reorderModifiers, int maxLineLength) {
+
+  /** The {@link #maxLineLength()} that lays out code by structure alone. */
+  public static final int UNLIMITED_LINE_LENGTH = (1 << 28) - 1;
+
+  public JavaFormatterOptions {
+    if (maxLineLength <= 0) {
+      throw new IllegalArgumentException("maxLineLength must be positive: " + maxLineLength);
+    }
+    maxLineLength = Math.min(maxLineLength, UNLIMITED_LINE_LENGTH);
+  }
 
   /** Returns the multiplier for the unit of indent. */
   public int indentationMultiplier() {
@@ -47,7 +58,8 @@ public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifie
   public static Builder builder() {
     return new AutoBuilder_JavaFormatterOptions_Builder()
         .formatJavadoc(true)
-        .reorderModifiers(true);
+        .reorderModifiers(true)
+        .maxLineLength(UNLIMITED_LINE_LENGTH);
   }
 
   /** A builder for {@link JavaFormatterOptions}. */
@@ -57,6 +69,8 @@ public record JavaFormatterOptions(boolean formatJavadoc, boolean reorderModifie
     public abstract Builder formatJavadoc(boolean formatJavadoc);
 
     public abstract Builder reorderModifiers(boolean reorderModifiers);
+
+    public abstract Builder maxLineLength(int maxLineLength);
 
     public abstract JavaFormatterOptions build();
   }

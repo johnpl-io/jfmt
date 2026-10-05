@@ -29,10 +29,23 @@ public final class JfmtFormatter {
 
     private final Formatter formatter;
 
+    /**
+     * Create a formatter that breaks code at syntactic boundaries without a
+     * maximum line length.
+     */
     public JfmtFormatter() {
+        this(JavaFormatterOptions.UNLIMITED_LINE_LENGTH);
+    }
+
+    /**
+     * Create a formatter that also breaks code to fit within
+     * {@code maxLineLength} columns where the layout allows.
+     */
+    public JfmtFormatter(int maxLineLength) {
         JavaFormatterOptions options = JavaFormatterOptions.builder()
                 .formatJavadoc(true)
                 .reorderModifiers(true)
+                .maxLineLength(maxLineLength)
                 .build();
         this.formatter = new Formatter(options);
     }

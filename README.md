@@ -8,7 +8,7 @@
 Capabilities include:
 
 - Use 4 spaces for block indentation and 8 spaces for continuation indentation
-- Break lists, expressions, and method chains at syntactic boundaries without imposing a maximum code-line length
+- Break lists, expressions, and method chains at syntactic boundaries without imposing a maximum code-line length, unless one is requested with `--max-line-length`
 - Order imports, remove unused imports, expand wildcards, and shorten unambiguous qualified type names
 - Format Javadoc prose to 80 columns
 - Read individual files, standard input, or a module source path
@@ -61,6 +61,12 @@ Check for files that would change without rewriting them:
 
 ```sh
 jfmt --check File.java AnotherFile.java
+```
+
+Also break code to fit within 100 columns, the [Google Java Style](https://google.github.io/styleguide/javaguide.html#s4.4-column-limit) column limit:
+
+```sh
+jfmt --max-line-length 100 File.java
 ```
 
 Format UTF-8 source from standard input:

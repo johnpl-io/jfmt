@@ -73,7 +73,6 @@ public final class Formatter {
 
   public static final int PREFERRED_LINE_WIDTH = 100;
 
-  private static final int UNLIMITED_LINE_WIDTH = (1 << 28) - 1;
   static final Range<Integer> EMPTY_RANGE = Range.closedOpen(-1, -1);
 
   private final JavaFormatterOptions options;
@@ -125,7 +124,7 @@ public final class Formatter {
             Newlines.guessLineSeparator(javaInput.getText()),
             options,
             markdownJavadocPositions.build());
-    doc.computeBreaks(commentsHelper, UNLIMITED_LINE_WIDTH, new Doc.State(+0, 0));
+    doc.computeBreaks(commentsHelper, options.maxLineLength(), new Doc.State(+0, 0));
     doc.write(javaOutput);
     javaOutput.flush();
   }

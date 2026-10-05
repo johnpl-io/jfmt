@@ -9,6 +9,8 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
 
   private Boolean reorderModifiers;
 
+  private Integer maxLineLength;
+
   AutoBuilder_JavaFormatterOptions_Builder() {}
 
   @Override
@@ -24,8 +26,16 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
   }
 
   @Override
+  public JavaFormatterOptions.Builder maxLineLength(int maxLineLength) {
+    this.maxLineLength = maxLineLength;
+    return this;
+  }
+
+  @Override
   public JavaFormatterOptions build() {
-    if (this.formatJavadoc == null || this.reorderModifiers == null) {
+    if (this.formatJavadoc == null
+        || this.reorderModifiers == null
+        || this.maxLineLength == null) {
       StringBuilder missing = new StringBuilder();
       if (this.formatJavadoc == null) {
         missing.append(" formatJavadoc");
@@ -33,8 +43,12 @@ class AutoBuilder_JavaFormatterOptions_Builder extends JavaFormatterOptions.Buil
       if (this.reorderModifiers == null) {
         missing.append(" reorderModifiers");
       }
+      if (this.maxLineLength == null) {
+        missing.append(" maxLineLength");
+      }
       throw new IllegalStateException("Missing required properties:" + missing);
     }
-    return new JavaFormatterOptions(this.formatJavadoc, this.reorderModifiers);
+    return new JavaFormatterOptions(
+        this.formatJavadoc, this.reorderModifiers, this.maxLineLength);
   }
 }

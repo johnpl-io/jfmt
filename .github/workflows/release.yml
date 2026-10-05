@@ -45,6 +45,16 @@ jobs:
       - name: Test
         run: ja test --all
 
+      - name: Assemble
+        run: ja assemble --jmod --module-version "$BUILD_VERSION" build/artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jfmt
+          path: build/artifacts
+          if-no-files-found: error
+
       - name: Publish to Maven Central
         run: ja maven deploy-central --module-version "$BUILD_VERSION"
         env:
@@ -61,8 +71,15 @@ jobs:
       contents: write
     runs-on: ubuntu-latest
     steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: jfmt
+          path: artifacts
+
       - name: Create GitHub release
         run: |
+          shopt -s nullglob
           arguments=(
             "$GITHUB_REF_NAME"
             --repo "$GITHUB_REPOSITORY"
@@ -72,6 +89,6 @@ jobs:
           if [[ "$GITHUB_REF_NAME" == *-rc.* ]]; then
             arguments+=(--prerelease)
           fi
-          gh release create "${arguments[@]}"
+          gh release create "${arguments[@]}" artifacts/*.jar artifacts/*.jmod
         env:
           GH_TOKEN: ${{ github.token }}

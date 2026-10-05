@@ -38,3 +38,13 @@ jobs:
 
       - name: Test
         run: ja test --all
+
+      - name: Assemble
+        run: ja assemble --jmod --module-version "0.0.0-${GITHUB_SHA::12}" build/artifacts
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jfmt
+          path: build/artifacts
+          if-no-files-found: error
